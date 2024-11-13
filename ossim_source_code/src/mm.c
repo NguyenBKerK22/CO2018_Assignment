@@ -245,7 +245,7 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
   vma1->vm_mm = mm;
 
   /* TODO: update mmap */
-  //mm->mmap = ...
+  mm->mmap = vma0;
 
   return 0;
 }
