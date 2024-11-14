@@ -77,6 +77,7 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  *@alloc_addr: address of allocated memory region
  *
  */
+
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
   /*Allocate at the toproof */
@@ -423,7 +424,13 @@ struct vm_rg_struct* get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, in
   // newrg->rg_start = ...
   // newrg->rg_end = ...
   */
-
+  newrg->rg_start = cur_vma->vm_end ;
+  if(!vmaid){
+    newrg->rg_end = cur_vma->vm_end + alignedsz; //DATA
+  }
+  else{
+  	newrg->rg_end = cur_vma->vm_end - alignedsz; //HEAP
+  }
   return newrg;
 }
 
@@ -439,8 +446,13 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, int vmastart, int 
   //struct vm_area_struct *vma = caller->mm->mmap;
 
   /* TODO validate the planned memory area is not overlapped */
-
-
+  struct vm_area_struct *vma = caller->mm->mmap;
+  while (vma!=NULL)
+  {
+    if(vma->vm_end)
+	  return -1;
+    vma = vma->vm_next;
+  }
   return 0;
 }
 
@@ -456,7 +468,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz, int* inc_limit_re
   struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
   int incnumpage =  inc_amt / PAGING_PAGESZ;
-  struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_sz, inc_amt); // What does this func do?
+  struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_sz, inc_amt); 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
   int old_end = cur_vma->vm_end;// If have old_end, then will have new_end
@@ -468,9 +480,13 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz, int* inc_limit_re
   /* TODO: Obtain the new vm area based on vmaid */
   //cur_vma->vm_end... 
   // inc_limit_ret...
-  	
-	cur_vma->vm_end = old_end + inc_amt;
-	inc_limit_ret =  cur_vma->vm_end;
+  if(!vmaid){	
+  	cur_vma->vm_end = old_end + inc_amt;
+  }
+  else{
+  	cur_vma->vm_end = old_end - inc_amt;
+  }
+  inc_limit_ret =  cur_vma->vm_end;
   if (vm_map_ram(caller, area->rg_start, area->rg_end, 
                     old_end, incnumpage , newrg) < 0)
     return -1; /* Map the memory to MEMRAM */

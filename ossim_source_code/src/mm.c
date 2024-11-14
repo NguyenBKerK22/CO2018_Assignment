@@ -80,8 +80,8 @@ int pte_set_fpn(uint32_t *pte, int fpn)
  * vmap_page_range - map a range of page at aligned address
  */
 int vmap_page_range(struct pcb_t *caller, // process call
-                                int addr, // start address which is aligned to pagesz
-                               int pgnum, // num of mapping page
+                                int addr, // start address which is aligned to pagesz // old end
+                               int pgnum, // num of mapping page //inc_numpg
            struct framephy_struct *frames,// list of the mapped frames
               struct vm_rg_struct *ret_rg)// return mapped region, the real mapped fp
 {                                         // no guarantee all given pages are mapped
@@ -96,16 +96,21 @@ int vmap_page_range(struct pcb_t *caller, // process call
   //ret_rg->rg_start = ...
   //ret_rg->vmaid = ...
   */
-	
+  ret_rg->rg_end =  addr + pgnum*PAGING_PAGESZ;
+  ret_rg->rg_start = addr;
+//  ret_rg->vmaid = 	;
   fpit->fp_next = frames;
 
   /* TODO map range of frame to address space 
    *      in page table pgd in caller->mm
    */
-
+	for(pgit=0;pgit<pgnum;pgit++){
+		caller->mm->pgd[pgit+pgn] = fpit->fp_next->fpn;
+		fpit = fpit->fp_next;
+	}
    /* Tracking for later page replacement activities (if needed)
     * Enqueue new usage page */
-   enlist_pgn_node(&caller->mm->fifo_pgn, pgn+pgit);
+   enlist_pgn_node(&caller->mm->fifo_pgn, pgn+pgit);  ///// ???
 
 
   return 0;
@@ -121,9 +126,7 @@ int vmap_page_range(struct pcb_t *caller, // process call
 int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct** frm_lst)
 {
   int pgit, fpn;
-  //struct framephy_struct *newfp_str;
-
-
+  struct framephy_struct *newfp_str;	
   /* TODO: allocate the page 
   //caller-> ...
   //frm_lst-> ...
@@ -132,8 +135,12 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
   {
     if(MEMPHY_get_freefp(caller->mram, &fpn) == 0)
    {
-     
+   		struct framephy_struct *new_node = malloc(sizeof(struct framephy_struct));
+   		new_node->fpn = fpn;
+   		new_node->fp_next = (*frm_list);
+   		(*frm_list) = new_node;
    } else {  // ERROR CODE of obtaining somes but not enough frames
+    	return -3000;
    } 
  }
 
@@ -228,16 +235,18 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
   enlist_vm_rg_node(&vma0->vm_freerg_list, first_rg);
 
   /* TODO update VMA0 next */
-   vma0->next = vma1;
+   vma0->vm_next = vma1;
 
   /* TODO: update one vma for HEAP */
+  #ifdef MM_PAGING_HEAP_GODOWN
    vma1->vm_id = 1;
-   vma1->vm_start = 0;
+   vma1->vm_start = caller->vmemsz;
    vma1->vm_end = vma1->vm_start;
-   vma1->sbrk = vma1->start;
+   vma1->sbrk = vma1->vm_start;
    struct vm_rg_struct *sec_rg = init_vm_rg(vma1->vm_start, vma1->vm_end, 1);
    enlist_vm_rg_node(&vma1->vm_freerg_list,sec_rg);
    vma1->vm_next = NULL;
+   #endif
   // enlist_vm_rg_node(&vma1->vm_freerg_list,...)
 
   /* Point vma owner backward */
