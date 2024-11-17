@@ -52,7 +52,8 @@ static void * cpu_routine(void * args) {
 	/* Check for new process in ready queue */
 	int time_left = 0;
 	struct pcb_t * proc = NULL;
-	while (1) {
+	int i = 0;
+	while (i<10) {
 		/* Check the status of current process */
 		if (proc == NULL) {
 			/* No process is running, the we load new process from
@@ -97,6 +98,7 @@ static void * cpu_routine(void * args) {
 		run(proc);
 		time_left--;
 		next_slot(timer_id);
+		print_pgtbl(proc,0,1024);
 	}
 	detach_event(timer_id);
 	pthread_exit(NULL);
@@ -163,7 +165,7 @@ static void read_config(const char * path) {
 	 * for legacy info 
          *  [time slice] [N = Number of CPU] [M = Number of Processes to be run]
          */
-        memramsz    =  0x100000;
+        memramsz    =  0x100000;//1
         memswpsz[0] = 0x1000000;
 	for(sit = 1; sit < PAGING_MAX_MMSWP; sit++)
 		memswpsz[sit] = 0;
@@ -268,16 +270,16 @@ int main(int argc, char * argv[]) {
 #else
 	pthread_create(&ld, NULL, ld_routine, (void*)ld_event);
 #endif
-//	for (i = 0; i < num_cpus; i++) {
-//		pthread_create(&cpu[i], NULL,
-//			cpu_routine, (void*)&args[i]);
-//	}
-//
-//	/* Wait for CPU and loader finishing */
-//	for (i = 0; i < num_cpus; i++) {
-//		pthread_join(cpu[i], NULL);
-//	}
-//	pthread_join(ld, NULL);
+	for (i = 0; i < num_cpus; i++) {
+		pthread_create(&cpu[i], NULL,
+			cpu_routine, (void*)&args[i]);
+	}
+
+	/* Wait for CPU and loader finishing */
+	for (i = 0; i < num_cpus; i++) {
+		pthread_join(cpu[i], NULL);
+	}
+	pthread_join(ld, NULL);
 
 	/* Stop timer */
 	stop_timer();

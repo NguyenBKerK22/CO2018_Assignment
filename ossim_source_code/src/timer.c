@@ -19,7 +19,8 @@ static int timer_stop = 0;
 
 
 static void * timer_routine(void * args) {
-	while (!timer_stop) {
+	int i = 0;
+	while (!timer_stop&&i<10) {
 		printf("Time slot %3lu\n", current_time());
 		int fsh = 0;
 		int event = 0;
@@ -54,6 +55,7 @@ static void * timer_routine(void * args) {
 		if (fsh == event) {
 			break;
 		}
+		i++;
 	}
 	pthread_exit(args);
 }

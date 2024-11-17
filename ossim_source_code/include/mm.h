@@ -6,7 +6,7 @@
 /* CPU Bus definition */
 #define PAGING_CPU_BUS_WIDTH 22 /* 22bit bus - MAX SPACE 4MB */
 #define PAGING_PAGESZ  256      /* 256B or 8-bits PAGE NUMBER */
-#define PAGING_MEMRAMSZ BIT(10) /* 1MB *00000000/
+#define PAGING_MEMRAMSZ BIT(10) /* 1MB */
 #define PAGING_PAGE_ALIGNSZ(sz) (DIV_ROUND_UP(sz,PAGING_PAGESZ)*PAGING_PAGESZ)
 
 #define PAGING_MEMSWPSZ BIT(14) /* 16MB */
@@ -102,9 +102,9 @@
 struct vm_rg_struct * init_vm_rg(int rg_start, int rg_endi, int vmaid);
 int enlist_vm_rg_node(struct vm_rg_struct **rglist, struct vm_rg_struct* rgnode);
 int enlist_pgn_node(struct pgn_t **pgnlist, int pgn);
-int vmap_page_range(struct pcb_t *caller, int addr, int pgnum, 
+int vmap_page_range(struct pcb_t *caller,int vmaid, int addr, int pgnum, 
                     struct framephy_struct *frames, struct vm_rg_struct *ret_rg);
-int vm_map_ram(struct pcb_t *caller, int astart, int send, int mapstart, int incpgnum, struct vm_rg_struct *ret_rg);
+int vm_map_ram(struct pcb_t *caller, int vmaid,int astart, int send, int mapstart, int incpgnum, struct vm_rg_struct *ret_rg);
 int alloc_pages_range(struct pcb_t *caller, int incpgnum, struct framephy_struct **frm_lst);
 int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
                 struct memphy_struct *mpdst, int dstfpn) ;
@@ -159,5 +159,5 @@ int print_list_vma(struct vm_area_struct *rg);
 
 
 int print_list_pgn(struct pgn_t *ip);
-int print_pgtbl(struct pcb_t *ip, uint32_t start, uint32_t end);
+int print_pgtbl(struct pcb_t *ip, int vmaid,uint32_t start, uint32_t end);
 #endif
