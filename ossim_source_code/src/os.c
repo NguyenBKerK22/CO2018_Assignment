@@ -47,19 +47,22 @@ struct cpu_args {
 
 
 static void * cpu_routine(void * args) {
-	struct timer_id_t * timer_id = ((struct cpu_args*)args)->timer_id;
+		struct timer_id_t * timer_id = ((struct cpu_args*)args)->timer_id;
 	int id = ((struct cpu_args*)args)->id;
 	/* Check for new process in ready queue */
 	int time_left = 0;
 	struct pcb_t * proc = NULL;
-	int i = 0;
-	while (i<10) {
+	while (1) {
 		/* Check the status of current process */
 		if (proc == NULL) {
 			/* No process is running, the we load new process from
 		 	* ready queue */
 			proc = get_proc();
 			if (proc == NULL) {
+			    if(done){
+			    	printf("\tCPU %d stopped\n",id);
+			    	break;
+			    }
                            next_slot(timer_id);
                            continue; /* First load failed. skip dummy load */
                         }
@@ -98,7 +101,8 @@ static void * cpu_routine(void * args) {
 		run(proc);
 		time_left--;
 		next_slot(timer_id);
-		print_pgtbl(proc,0,1024);
+		//print_pgtbl(proc,0,1024);
+		//i++;
 	}
 	detach_event(timer_id);
 	pthread_exit(NULL);
@@ -148,12 +152,14 @@ static void * ld_routine(void * args) {
 }
 
 static void read_config(const char * path) {
+	//printf("%s\n",path);
 	FILE * file;
 	if ((file = fopen(path, "r")) == NULL) {
 		printf("Cannot find configure file at %s\n", path);
 		exit(1);
 	}
 	fscanf(file, "%d %d %d\n", &time_slot, &num_cpus, &num_processes);
+	//printf("%d %d %d\n", time_slot, num_cpus, num_processes);
 	ld_processes.path = (char**)malloc(sizeof(char*) * num_processes);
 	ld_processes.start_time = (unsigned long*)
 		malloc(sizeof(unsigned long) * num_processes);
@@ -165,7 +171,7 @@ static void read_config(const char * path) {
 	 * for legacy info 
          *  [time slice] [N = Number of CPU] [M = Number of Processes to be run]
          */
-        memramsz    =  0x100000;//1
+        memramsz    =  0x100000;
         memswpsz[0] = 0x1000000;
 	for(sit = 1; sit < PAGING_MAX_MMSWP; sit++)
 		memswpsz[sit] = 0;
@@ -179,7 +185,7 @@ static void read_config(const char * path) {
 	*/
 	fscanf(file, "%d\n", &memramsz);
 	for(sit = 0; sit < PAGING_MAX_MMSWP; sit++)
-		fscanf(file, "%d", &(memswpsz[sit])); 
+		fscanf(file, "%d", &(memswpsz[sit]));
 #ifdef MM_PAGIMG_HEAP_GODOWN
 	fscanf(file, "%d\n", &vmemsz);
 #endif
@@ -204,6 +210,7 @@ static void read_config(const char * path) {
 		fscanf(file, "%lu %s\n", &ld_processes.start_time[i], proc);
 #endif
 		strcat(ld_processes.path[i], proc);
+		//printf("%s\n",ld_processes.path[i]);
 	}
 }
 
@@ -232,7 +239,6 @@ int main(int argc, char * argv[]) {
 	}
 	struct timer_id_t * ld_event = attach_event();
 	start_timer();
-
 #ifdef MM_PAGING
 	/* Init all MEMPHY include 1 MEMRAM and n of MEMSWP */
 	int rdmflag = 1; /* By default memphy is RANDOM ACCESS MEMORY */
@@ -241,7 +247,7 @@ int main(int argc, char * argv[]) {
 	struct memphy_struct mswp[PAGING_MAX_MMSWP];
 
 	/* Create MEM RAM */
-	init_memphy(&mram, memramsz, rdmflag); //
+	init_memphy(&mram, memramsz, rdmflag);
 
         /* Create all MEM SWAP */ 
 	int sit;
@@ -274,13 +280,11 @@ int main(int argc, char * argv[]) {
 		pthread_create(&cpu[i], NULL,
 			cpu_routine, (void*)&args[i]);
 	}
-
 	/* Wait for CPU and loader finishing */
 	for (i = 0; i < num_cpus; i++) {
 		pthread_join(cpu[i], NULL);
 	}
 	pthread_join(ld, NULL);
-
 	/* Stop timer */
 	stop_timer();
 

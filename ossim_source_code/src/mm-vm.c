@@ -79,7 +79,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 {
   struct vm_area_struct* cur_vma = get_vma_by_num(caller->mm,vmaid);
   //print_list_rg(cur_vma->vm_freerg_list);
-  print_pgtbl(caller,vmaid,3145216,-1);
+ // print_pgtbl(caller,vmaid,0,-1);
   struct vm_rg_struct rgnode;
   /* TODO: commit the vmaid */
   // rgnode.vmaid
@@ -164,7 +164,7 @@ int __free(struct pcb_t *caller, int rgid)
 int pgalloc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
   int addr;
-  print_pgtbl(proc,0,0,-1);
+  //print_pgtbl(proc,0,0,-1);
   /* By default using vmaid = 0 */
   return __alloc(proc, 0, reg_index, size, &addr);
 }
@@ -206,6 +206,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
  
   if (!PAGING_PTE_PAGE_PRESENT(pte))
   { /* Page is not online, make it actively living */
+    printf("OKE");
     int vicpgn, swpfpn; 
     //int vicfpn;
     //uint32_t vicpte;
@@ -215,24 +216,26 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     /* TODO: Play with your paging theory here */
     /* Find victim page */
     find_victim_page(caller->mm, &vicpgn);
-
+    
     /* Get free frame in MEMSWP */
     MEMPHY_get_freefp(caller->active_mswp, &swpfpn);
 
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
-    //__swap_cp_page();
+    __swap_cp_page(caller->mram,PAGING_PTE_FPN(mm->pgd[vicpgn]),caller->active_mswp,swpfpn);
     /* Copy target frame from swap to mem */
-    //__swap_cp_page();
+    __swap_cp_page(caller->active_mswp,tgtfpn,caller->mram,PAGING_PTE_FPN(mm->pgd[vicpgn]));
 
     /* Update page table */
-    //pte_set_swap() &mm->pgd;
+    uint32_t tmp;		
+    pte_set_swap(&tmp, 0, swpfpn);
+    caller->mm->pgd[vicpgn] = tmp;
 
     /* Update its online status of the target page */
     //pte_set_fpn() & mm->pgd[pgn];
     pte_set_fpn(&pte, tgtfpn);
-
+    mm->pgd[pgn] = pte;
     enlist_pgn_node(&caller->mm->fifo_pgn,pgn);
   }
 
@@ -325,7 +328,8 @@ int pgread(
 #ifdef IODUMP
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
-  print_pgtbl(proc, 0,0, -1); //print max TBL
+  print_pgtbl(proc, 0,0, -1); 
+  print_pgtbl(proc, 1,0, -1); //print max TBL
 #endif
   MEMPHY_dump(proc->mram);
 #endif
@@ -367,6 +371,7 @@ int pgwrite(
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc,0, 0, -1); //print max TBL
+  print_pgtbl(proc,1, 0, -1);
 #endif
   MEMPHY_dump(proc->mram);
 #endif
@@ -490,7 +495,8 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   struct pgn_t *pg = mm->fifo_pgn;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
-
+  *retpgn = pg->pgn;
+  mm->fifo_pgn = pg->pg_next;
   free(pg);
 
   return 0;

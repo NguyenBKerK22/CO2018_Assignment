@@ -89,7 +89,6 @@ int vmap_page_range(struct pcb_t *caller,
   //uint32_t * pte = malloc(sizeof(uint32_t));
   struct framephy_struct *fpit = malloc(sizeof(struct framephy_struct));
   //int  fpn;
-  printf("addr: %d\n",addr);
   int pgit = 0;
   int pgn = PAGING_PGN(addr); //old_end
 
@@ -98,7 +97,6 @@ int vmap_page_range(struct pcb_t *caller,
   ret_rg->rg_start = addr;
   ret_rg->vmaid = vmaid;
   fpit->fp_next = frames;
-  printf("NGON%d\n",pgn);
   /* TODO map range of frame to address space 
    *      in page table pgd in caller->mm
    */
@@ -107,13 +105,17 @@ int vmap_page_range(struct pcb_t *caller,
 		pte_set_fpn(&tmp,fpit->fp_next->fpn);
 		CLRBIT(tmp,PAGING_PTE_EMPTY01_MASK);
 		CLRBIT(tmp,PAGING_PTE_EMPTY02_MASK);
-		if(!vmaid) caller->mm->pgd[pgit+pgn] = tmp;
-		else caller->mm->pgd[pgn-pgit] = tmp;
+		int index;
+		if(!vmaid) index = pgn+pgit; 
+		else index = pgn-pgit;
+		caller->mm->pgd[index] = tmp;
+		
 		fpit = fpit->fp_next;
+		enlist_pgn_node(&caller->mm->fifo_pgn, index);
 	}
    /* Tracking for later page replacement activities (if needed)
     * Enqueue new usage page */
-   enlist_pgn_node(&caller->mm->fifo_pgn, pgn+pgit);  ///// ???
+ //  enlist_pgn_node(&caller->mm->fifo_pgn, pgn+pgit); 
 
 
   return 0;
@@ -132,23 +134,37 @@ int vmap_page_range(struct pcb_t *caller,
 int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct** frm_lst)
 {
   int pgit, fpn;
-  struct framephy_struct *newfp_str;	
-  /* TODO: allocate the page 
-  //caller-> ...
-  //frm_lst-> ...
-  */
+ // struct framephy_struct *newfp_str;	
+  /* TODO: allocate the page*/
   if(req_pgnum==0) return -1;
   for(pgit = 0; pgit < req_pgnum; pgit++)
   {
-    if(MEMPHY_get_freefp(caller->mram, &fpn) == 0)
-   {
-   		struct framephy_struct *new_node = malloc(sizeof(struct framephy_struct));
-   		new_node->fpn = fpn;
-   		new_node->fp_next = (*frm_lst);
-   		(*frm_lst) = new_node;
-   } else {  // ERROR CODE of obtaining somes but not enough frames
-    	return -3000;
-   } 
+    	if(MEMPHY_get_freefp(caller->mram, &fpn) == 0)
+   		{
+   			struct framephy_struct *new_node = malloc(sizeof(struct framephy_struct));
+   			new_node->fpn = fpn;
+   			new_node->fp_next = (*frm_lst);
+   			(*frm_lst) = new_node;
+   		}else if(MEMPHY_get_freefp(caller->active_mswp,&fpn) == 0){ 
+   			int vic_pgn;
+   			find_victim_page(caller->mm,&vic_pgn);
+   			printf("VICTIM: %d\n",vic_pgn);
+   			uint32_t pte = caller->mm->pgd[vic_pgn];
+   			
+			__swap_cp_page(caller->mram,PAGING_PTE_FPN(pte),caller->active_mswp,fpn);
+			
+			uint32_t tmp;
+			pte_set_swap(&tmp, 0, fpn);
+      			CLRBIT(tmp, PAGING_PTE_DIRTY_MASK);
+
+			caller->mm->pgd[vic_pgn] = tmp;
+			printf("TEMP: %x\n",tmp);
+			struct framephy_struct *new_node = malloc(sizeof(struct framephy_struct));
+   			new_node->fpn = PAGING_PTE_FPN(pte);
+   			new_node->fp_next = (*frm_lst);
+   			(*frm_lst) = new_node;
+   		} 
+   		else return -3000;
  }
 
   return 0;
@@ -360,13 +376,12 @@ int print_pgtbl(struct pcb_t *caller,int vmaid, uint32_t start, uint32_t end)
   int pgit;
   if(end == -1){
     if(!vmaid){
-    pgn_start = 0;
-    struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-    end = cur_vma->vm_end;
+        pgn_start = 0;
+        struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
+        end = cur_vma->vm_end;
     }
     else{
         struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-        printf("RANGE: %lu %lu\n",cur_vma->vm_start,cur_vma->vm_end);
         start = cur_vma->vm_start;
         end = cur_vma->vm_end;
     }
