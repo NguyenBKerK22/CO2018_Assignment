@@ -51,7 +51,7 @@ int init_pte(uint32_t *pte,
  */
 int pte_set_swap(uint32_t *pte, int swptyp, int swpoff)
 {
-  SETBIT(*pte, PAGING_PTE_PRESENT_MASK);
+  CLRBIT(*pte, PAGING_PTE_PRESENT_MASK);
   SETBIT(*pte, PAGING_PTE_SWAPPED_MASK);
 
   SETVAL(*pte, swptyp, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
@@ -101,6 +101,7 @@ int vmap_page_range(struct pcb_t *caller,
    *      in page table pgd in caller->mm
    */
 	for(pgit=0;pgit<pgnum;pgit++){
+		
 		uint32_t tmp;
 		pte_set_fpn(&tmp,fpit->fp_next->fpn);
 		CLRBIT(tmp,PAGING_PTE_EMPTY01_MASK);
@@ -108,6 +109,7 @@ int vmap_page_range(struct pcb_t *caller,
 		int index;
 		if(!vmaid) index = pgn+pgit; 
 		else index = pgn-pgit;
+		printf("DUMAVC: %d %d %d FPN: %d\n",pgn,pgit,index,fpit->fp_next->fpn);	 
 		caller->mm->pgd[index] = tmp;
 		
 		fpit = fpit->fp_next;
@@ -147,22 +149,24 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
    			(*frm_lst) = new_node;
    		}else if(MEMPHY_get_freefp(caller->active_mswp,&fpn) == 0){ 
    			int vic_pgn;
-   			find_victim_page(caller->mm,&vic_pgn);
-   			printf("VICTIM: %d\n",vic_pgn);
-   			uint32_t pte = caller->mm->pgd[vic_pgn];
+   			if(find_victim_page(caller->mm,&vic_pgn)!=-1){
+//   				printf("VICTIMHHEHEHE: %d\n",vic_pgn);z
+   				uint32_t pte = caller->mm->pgd[vic_pgn];
    			
-			__swap_cp_page(caller->mram,PAGING_PTE_FPN(pte),caller->active_mswp,fpn);
+				__swap_cp_page(caller->mram,PAGING_PTE_FPN(pte),caller->active_mswp,fpn);
 			
-			uint32_t tmp;
-			pte_set_swap(&tmp, 0, fpn);
-      			CLRBIT(tmp, PAGING_PTE_DIRTY_MASK);
+				uint32_t tmp;
+				pte_set_swap(&tmp, 0, fpn);
+      				CLRBIT(tmp, PAGING_PTE_DIRTY_MASK);
 
-			caller->mm->pgd[vic_pgn] = tmp;
-			printf("TEMP: %x\n",tmp);
-			struct framephy_struct *new_node = malloc(sizeof(struct framephy_struct));
-   			new_node->fpn = PAGING_PTE_FPN(pte);
-   			new_node->fp_next = (*frm_lst);
-   			(*frm_lst) = new_node;
+				caller->mm->pgd[vic_pgn] = tmp;
+				printf("TEMP: %x\n",tmp);
+				struct framephy_struct *new_node = malloc(sizeof(struct framephy_struct));
+   				new_node->fpn = PAGING_PTE_FPN(pte);
+   				new_node->fp_next = (*frm_lst);
+   				(*frm_lst) = new_node;
+   			}
+   			else return -3000;
    		} 
    		else return -3000;
  }
@@ -255,7 +259,8 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
   vma0->vm_end = vma0->vm_start;
   vma0->sbrk = vma0->vm_start;
   struct vm_rg_struct *first_rg = init_vm_rg(vma0->vm_start, vma0->vm_end, 0);
-  enlist_vm_rg_node(&vma0->vm_freerg_list, first_rg);
+  vma0->vm_freerg_list = NULL;
+  //enlist_vm_rg_node(&vma0->vm_freerg_list, first_rg);
 
   /* TODO update VMA0 next */
    vma0->vm_next = vma1;
@@ -267,7 +272,8 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
    vma1->vm_end = vma1->vm_start;
    vma1->sbrk = vma1->vm_start;
    struct vm_rg_struct *sec_rg = init_vm_rg(vma1->vm_start, vma1->vm_end, 1);
-   enlist_vm_rg_node(&vma1->vm_freerg_list,sec_rg);
+   vma1->vm_freerg_list = NULL;
+  // enlist_vm_rg_node(&vma1->vm_freerg_list,sec_rg);
    vma1->vm_next = NULL;
    #endif
 

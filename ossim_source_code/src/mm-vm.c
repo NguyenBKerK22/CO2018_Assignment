@@ -14,16 +14,148 @@
  *@rg_elmt: new region
  *
  */
-int enlist_vm_freerg_list(struct mm_struct *mm, int vmaid, struct vm_rg_struct* rg_elmt)
+int enlist_vm_freerg_list(struct pcb_t* caller,struct mm_struct *mm, int vmaid, struct vm_rg_struct* rg_elmt)
 {
-   struct vm_area_struct* cur_vma = get_vma_by_num(mm,vmaid);
-  struct vm_rg_struct *rg_node = cur_vma->vm_freerg_list;
+  
+  struct vm_area_struct* cur_vma = get_vma_by_num(mm,vmaid);
+  struct vm_rg_struct *rg_head = cur_vma->vm_freerg_list;
+  struct vm_rg_struct *head;
+  unsigned long min_t;
+  if ((rg_elmt->rg_start >= rg_elmt->rg_end && (!vmaid))||(rg_elmt->rg_start <= rg_elmt->rg_end && (vmaid))) return -1;
+  if(rg_head ==NULL){
+  	rg_elmt->rg_next = NULL;
+  	cur_vma->vm_freerg_list = rg_elmt;
+  	head = cur_vma->vm_freerg_list;
+  		printf("TREN\n");
+  		while(head != NULL){
+  			printf("\nTHIS:%lu %lu",head->rg_start,head->rg_end);
+  			head = head->rg_next;
+  		}	
+	return;
+  }
+  if(!vmaid){
+  	min_t = (rg_elmt->rg_end <= rg_head->rg_start)?(rg_head->rg_start - rg_elmt->rg_end):1e9;
+  	if(min_t == 0){
+  		rg_head->rg_start = rg_elmt->rg_start;
+  		goto CHECK;
+  	}
+  	else if(min_t != 1e9){
+  		rg_elmt->rg_next = rg_head;
+  		cur_vma->vm_freerg_list = rg_elmt;
+  		goto CHECK;
+  	}
+  	struct vm_rg_struct *pre =rg_head;
+  	while(rg_head->rg_next!=NULL){
+  		if(rg_elmt->rg_end <= rg_head->rg_next->rg_start){
+  			if(rg_elmt->rg_end < rg_head->rg_next->rg_start ){
+  				rg_elmt->rg_next = rg_head->rg_next;
+  				rg_head->rg_next = rg_elmt;
+  			}
+  			else{
+  				rg_head->rg_next->rg_start = rg_elmt->rg_start;
+  			} 
+			goto CHECK;	
+  		
+  		}
+  		rg_head = rg_head->rg_next;
+  	}	
+  	rg_head->rg_next = rg_elmt;
 
-  if ((rg_elmt->rg_start >= rg_elmt->rg_end && (!vmaid))||(rg_elmt->rg_start <= rg_elmt->rg_end && (vmaid)))
-    return -1;
-  rg_elmt->rg_next = rg_node;
-  /* Enlist the new region */
-  cur_vma->vm_freerg_list = rg_elmt;
+  }
+  else{
+  	min_t = (rg_elmt->rg_end >= rg_head->rg_start)?(rg_elmt->rg_end - rg_head->rg_start):1e9;
+  	if(min_t == 0){
+  		rg_head->rg_start = rg_elmt->rg_start;
+  		head = cur_vma->vm_freerg_list;
+  		printf("TREN\n");
+  		while(head != NULL){
+  			printf("\nTHIS:%lu %lu",head->rg_start,head->rg_end);
+  			head = head->rg_next;
+  		}
+  		goto CHECK;
+  	}
+  	else if(min_t != 1e9){
+  		rg_elmt->rg_next = rg_head;
+  		cur_vma->vm_freerg_list = rg_elmt;
+  		head = cur_vma->vm_freerg_list;
+  		printf("TREN\n");
+  		while(head != NULL){
+  			printf("\nTHIS:%lu %lu",head->rg_start,head->rg_end);
+  			head = head->rg_next;
+  		}
+  		goto CHECK;
+  	}
+  	struct vm_rg_struct *pre =rg_head;
+  	while(rg_head->rg_next!=NULL){
+  		if(rg_elmt->rg_end >= rg_head->rg_next->rg_start){
+  			if(rg_elmt->rg_end > rg_head->rg_next->rg_start ){
+  				rg_elmt->rg_next = rg_head->rg_next;
+  				rg_head->rg_next = rg_elmt;
+  			}
+  			else{
+  				rg_head->rg_next->rg_start = rg_elmt->rg_start;
+  			} 
+  			head = cur_vma->vm_freerg_list;
+  			printf("TREN\n");
+  			while(head != NULL){
+  				printf("\nTHIS:%lu %lu",head->rg_start,head->rg_end);
+  				head = head->rg_next;
+  			}
+			goto CHECK;	
+  		
+  		}
+  		rg_head = rg_head->rg_next;
+  	}	
+  	rg_head->rg_next = rg_elmt;
+  }
+CHECK:
+  head = cur_vma->vm_freerg_list;
+  while(head != NULL && head->rg_next != NULL){
+  	if(head->rg_end == head->rg_next->rg_start){
+
+  		head->rg_end = head->rg_next->rg_end;
+  		struct vm_rg_struct *temp = head->rg_next;
+  		head->rg_next = head->rg_next->rg_next;
+  		free(temp);
+  	}
+  	head = head->rg_next;
+  }
+  head = cur_vma->vm_freerg_list;
+  while(head != NULL){
+  	if(!vmaid){
+  		int start = PAGING_PAGE_ALIGNSZ(head->rg_start);
+  		int end = (head->rg_end / PAGING_PAGESZ)*PAGING_PAGESZ;
+  		if(end - start >0){
+  			start/=PAGING_PAGESZ;
+  			end/=PAGING_PAGESZ;
+  			for(start;start<end;start++){
+  				if(PAGING_PTE_PAGE_PRESENT(mm->pgd[start])){
+  					printf("FPN: %d\n",PAGING_PTE_FPN(mm->pgd[start]));
+  					MEMPHY_put_freefp(caller->mram,PAGING_PTE_FPN(mm->pgd[start]));
+  					mm->pgd[start] = 0;
+  				}
+  			}
+  		}
+   	}
+  	else{
+  		int start = PAGING_PAGE_ALIGNSZ(head->rg_end);
+  		int end = (head->rg_start / PAGING_PAGESZ)*PAGING_PAGESZ;
+  		if(end - start >0){
+  			start/=PAGING_PAGESZ;
+  			end/=PAGING_PAGESZ;
+  			printf("START M: %d, END M:%d",start,end);
+  			for(end;end>start;end--){
+  				if(PAGING_PTE_PAGE_PRESENT(mm->pgd[end])){
+  					printf("FPN: %d\n",PAGING_PTE_FPN(mm->pgd[end]));
+  					MEMPHY_put_freefp(caller->mram,PAGING_PTE_FPN(mm->pgd[end]));
+  					mm->pgd[end] = 0;
+  				}
+  			}
+  		}
+  	}
+  	printf("\nTHIS:%lu %lu",head->rg_start,head->rg_end);
+  	head = head->rg_next;
+  }
 
   return 0;
 }
@@ -79,7 +211,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 {
   struct vm_area_struct* cur_vma = get_vma_by_num(caller->mm,vmaid);
   //print_list_rg(cur_vma->vm_freerg_list);
- // print_pgtbl(caller,vmaid,0,-1);
   struct vm_rg_struct rgnode;
   /* TODO: commit the vmaid */
   // rgnode.vmaid
@@ -90,8 +221,36 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
     caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
 
     caller->mm->symrgtbl[rgid].vmaid = rgnode.vmaid;
-	
+    //NEW
+    	struct vm_rg_struct * ret_rg = malloc(sizeof(struct vm_rg_struct));
+    	struct framephy_struct *frm_lst = NULL;
+    	int inc_start;
+    	int inc_end;
+    	int incnumpage;
+    	if(!vmaid){
+    		inc_start = PAGING_PAGE_ALIGNSZ(rgnode.rg_start);
+    		inc_end = PAGING_PAGE_ALIGNSZ(rgnode.rg_end);
+    		incnumpage = (inc_end - inc_start)/256;
+    		printf("start: %d end: %d inc: %d start: %ld\n",inc_start,inc_end,incnumpage,PAGING_PAGE_ALIGNSZ(rgnode.rg_start));
+    		alloc_pages_range(caller, incnumpage, &frm_lst);
+    		vmap_page_range(caller, vmaid, PAGING_PAGE_ALIGNSZ(rgnode.rg_start), incnumpage, frm_lst, ret_rg);
+    		free(ret_rg);
+    	}
+    	else{
+    		inc_start = (rgnode.rg_end/PAGING_PAGESZ)*256;
+    		inc_end = (rgnode.rg_start/PAGING_PAGESZ)*256;
+    		incnumpage = (inc_end - inc_start)/256;
+    		printf("start: %d end: %d inc: %d start: %ld\n",inc_start,inc_end,incnumpage,rgnode.rg_start/PAGING_PAGESZ);
+    		alloc_pages_range(caller, incnumpage, &frm_lst);
+    		vmap_page_range(caller, vmaid, inc_end, incnumpage, frm_lst, ret_rg);
+    		free(ret_rg);
+    	
+    	}
+    //
     *alloc_addr = rgnode.rg_start;
+    printf("SIZE :%d\n",size);
+    print_pgtbl(caller,0,0,-1);
+    print_pgtbl(caller,1,0,-1);
     return 0;
   }
 
@@ -116,15 +275,17 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
      size = 0- size;
   }
   cur_vma->sbrk+=size;
+  caller->mm->symrgtbl[rgid].rg_end = cur_vma->sbrk;
   caller->mm->symrgtbl[rgid].vmaid = vmaid;
-  
   struct vm_rg_struct *rg_elmt = malloc(sizeof(struct vm_rg_struct));
   rg_elmt->rg_start = cur_vma->sbrk;
   rg_elmt->rg_end = cur_vma->vm_end;
   rg_elmt->vmaid = vmaid;
-  enlist_vm_freerg_list(caller->mm, rg_elmt->vmaid,rg_elmt);
+  enlist_vm_freerg_list(caller,caller->mm, rg_elmt->vmaid,rg_elmt);
   /* TODO: commit the allocation address */
   *alloc_addr = caller->mm->symrgtbl[rgid].rg_start;
+  print_pgtbl(caller,0,0,-1);
+  print_pgtbl(caller,1,0,-1);
   return 0;
 }
 
@@ -142,17 +303,17 @@ int __free(struct pcb_t *caller, int rgid)
   // Dummy initialization for avoding compiler dummay warning
   // in incompleted TODO code rgnode will overwrite through implementing
   // the manipulation of rgid later
-  rgnode->vmaid = 0;  //dummy initialization
-  rgnode->vmaid = 1;  //dummy initialization
+  //dummy initialization
 
   if(rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
     return -1;
   /* TODO: Manage the collect freed region to freerg_list */
-  
-
+  rgnode->vmaid = caller->mm->symrgtbl[rgid].vmaid;
+  rgnode->rg_start = caller->mm->symrgtbl[rgid].rg_start;
+  rgnode->rg_end = caller->mm->symrgtbl[rgid].rg_end;
   /*enlist the obsoleted memory region */
-  enlist_vm_freerg_list(caller->mm, rgnode->vmaid, rgnode);
-
+  enlist_vm_freerg_list(caller,caller->mm, rgnode->vmaid, rgnode);
+  
   return 0;
 }
 
@@ -206,7 +367,6 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
  
   if (!PAGING_PTE_PAGE_PRESENT(pte))
   { /* Page is not online, make it actively living */
-    printf("OKE");
     int vicpgn, swpfpn; 
     //int vicfpn;
     //uint32_t vicpte;
@@ -395,7 +555,7 @@ int free_pcb_memph(struct pcb_t *caller)
   {
     pte= caller->mm->pgd[pagenum];
 
-    if (!PAGING_PTE_PAGE_PRESENT(pte))
+    if (PAGING_PTE_PAGE_PRESENT(pte))
     {
       fpn = PAGING_PTE_FPN(pte);
       MEMPHY_put_freefp(caller->mram, fpn);
@@ -495,11 +655,15 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   struct pgn_t *pg = mm->fifo_pgn;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
-  *retpgn = pg->pgn;
-  mm->fifo_pgn = pg->pg_next;
-  free(pg);
+  if(pg!=NULL){
+  	*retpgn = pg->pgn;
+  	mm->fifo_pgn = pg->pg_next;
+  	free(pg);
+  	printf("OKE\n");
+  	return 0;
+  }
 
-  return 0;
+  return -1;
 }
 
 /*get_free_vmrg_area - get a free vm region
@@ -589,12 +753,16 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
                      		rgit->rg_next = NULL;
                 	}
              }
+             rgit = cur_vma->vm_freerg_list;
+  while(rgit!=NULL){
+  	printf("RG:%lu %lu\n",rgit->rg_start,rgit->rg_end);
+	rgit = rgit->rg_next;  
+  }
              return 0;
          }
       }
       rgit = rgit->rg_next;	// Traverse next rg
   }
-
  if(newrg->rg_start == -1) // new region not found
    return -1;
 
